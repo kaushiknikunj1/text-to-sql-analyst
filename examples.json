@@ -1,0 +1,26 @@
+[
+  {
+    "question": "Which merchant category had the highest refund rate in September 2026?",
+    "sql": "SELECT m.category,\n       COUNT(*) AS payments,\n       SUM(p.status = 'refunded') AS refunded,\n       ROUND(100.0 * SUM(p.status = 'refunded') / COUNT(*), 2) AS refund_rate_pct\nFROM payments p\nJOIN merchants m ON m.merchant_id = p.merchant_id\nWHERE p.created_at >= '2026-09-01' AND p.created_at < '2026-10-01'\n  AND p.status IN ('captured', 'refunded')\nGROUP BY m.category\nORDER BY refund_rate_pct DESC\nLIMIT 10"
+  },
+  {
+    "question": "What is the payment success rate by payment method this month?",
+    "sql": "SELECT method,\n       COUNT(*) AS attempts,\n       ROUND(100.0 * SUM(status != 'failed') / COUNT(*), 2) AS success_rate_pct\nFROM payments\nWHERE created_at >= '2026-10-01'\nGROUP BY method\nORDER BY success_rate_pct DESC\nLIMIT 10"
+  },
+  {
+    "question": "Show monthly captured volume in INR for 2026.",
+    "sql": "SELECT strftime('%Y-%m', created_at) AS month,\n       COUNT(*) AS payments,\n       ROUND(SUM(amount_inr) / 1e7, 2) AS volume_cr_inr\nFROM payments\nWHERE status IN ('captured', 'refunded') AND created_at >= '2026-01-01'\nGROUP BY month\nORDER BY month\nLIMIT 12"
+  },
+  {
+    "question": "Top 5 merchants by net revenue (captured minus refunds) in Q3 2026.",
+    "sql": "WITH cap AS (\n  SELECT merchant_id, SUM(amount_inr) AS captured\n  FROM payments\n  WHERE status IN ('captured', 'refunded') AND created_at >= '2026-07-01' AND created_at < '2026-10-01'\n  GROUP BY merchant_id\n), ref AS (\n  SELECT p.merchant_id, SUM(r.amount_inr) AS refunded\n  FROM refunds r JOIN payments p ON p.payment_id = r.payment_id\n  WHERE r.created_at >= '2026-07-01' AND r.created_at < '2026-10-01'\n  GROUP BY p.merchant_id\n)\nSELECT m.name, m.category,\n       ROUND(cap.captured - COALESCE(ref.refunded, 0), 2) AS net_revenue_inr\nFROM cap\nJOIN merchants m ON m.merchant_id = cap.merchant_id\nLEFT JOIN ref ON ref.merchant_id = cap.merchant_id\nORDER BY net_revenue_inr DESC\nLIMIT 5"
+  },
+  {
+    "question": "Which acquisition channel brings customers with the highest average order value?",
+    "sql": "SELECT c.acquisition_channel,\n       COUNT(DISTINCT c.customer_id) AS customers,\n       ROUND(AVG(p.amount_inr), 2) AS avg_order_value_inr\nFROM payments p\nJOIN customers c ON c.customer_id = p.customer_id\nWHERE p.status IN ('captured', 'refunded')\nGROUP BY c.acquisition_channel\nORDER BY avg_order_value_inr DESC\nLIMIT 10"
+  },
+  {
+    "question": "What are the most common refund reasons for Travel merchants?",
+    "sql": "SELECT r.reason, COUNT(*) AS refunds, ROUND(SUM(r.amount_inr), 2) AS refunded_inr\nFROM refunds r\nJOIN payments p ON p.payment_id = r.payment_id\nJOIN merchants m ON m.merchant_id = p.merchant_id\nWHERE m.category = 'Travel'\nGROUP BY r.reason\nORDER BY refunds DESC\nLIMIT 10"
+  }
+]
